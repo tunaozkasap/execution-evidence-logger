@@ -6,10 +6,13 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * A logger for accumulating facts about an execution in a thread. In a likely scenario thread will be a request thread.
  *
  */
+@Slf4j
 public class ExecutionEvidenceLogger {
 	private static ObjectMapper objectMapper = new ObjectMapper();
 	
@@ -51,6 +54,11 @@ public class ExecutionEvidenceLogger {
 		
 		public ObjectNode toObjectNode() {
 			return evidenceNode;
+		}
+		
+		public void logNow() {
+			// This message won't be logged out if the layout was registered correctly
+			log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line");
 		}
 		
 		public class ExecutionFact {
