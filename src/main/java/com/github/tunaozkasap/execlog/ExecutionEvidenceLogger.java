@@ -1,4 +1,4 @@
-package org.tunaozkasap.execlog;
+package com.github.tunaozkasap.execlog;
 
 import java.util.HashMap;
 import java.util.Map;
