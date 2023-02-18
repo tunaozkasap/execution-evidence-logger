@@ -57,8 +57,29 @@ public class ExecutionEvidenceLogger {
 		}
 		
 		public void logNow() {
-			// This message won't be logged out if the layout was registered correctly
+			logbackHook();
+	        // This message won't be logged out if the layout was registered correctly
 			log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line");
+		}
+		
+		public void logbackHook() {
+			try {
+				if(isLogbackClassicInClasspath()) {
+					Class<?> logbackHookClass = Class.forName("com.github.tunaozkasap.execlog.LogbackHook");
+					logbackHookClass.getMethod("hook").invoke(logbackHookClass);
+				}
+			} catch (Exception ex) {
+				log.error("Failed calling logback hook", ex);
+			}
+		}
+		
+		static boolean isLogbackClassicInClasspath() {
+			try {
+				Class.forName("ch.qos.logback.classic.Logger");
+				return true;
+			} catch(ClassNotFoundException ex) {
+				return false;
+			}
 		}
 		
 		public class ExecutionFact {
