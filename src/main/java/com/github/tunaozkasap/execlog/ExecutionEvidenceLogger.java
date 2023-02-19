@@ -59,7 +59,7 @@ public class ExecutionEvidenceLogger {
 		public void logNow() {
 			logbackHook();
 	        // This message won't be logged out if the layout was registered correctly
-			log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line");
+			log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line", toObjectNode());
 		}
 		
 		public void logbackHook() {

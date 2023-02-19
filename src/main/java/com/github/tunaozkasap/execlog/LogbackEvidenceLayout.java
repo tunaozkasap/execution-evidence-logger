@@ -85,7 +85,7 @@ public class LogbackEvidenceLayout extends LayoutBase<ILoggingEvent> {
         add(THREAD_ATTR_NAME, this.includeThreadName, event.getThreadName(), rootNode);
         addMap(MDC_ATTR_NAME, this.includeMDC, event.getMDCPropertyMap(), rootNode);
         add(LOGGER_ATTR_NAME, this.includeLoggerName, event.getLoggerName(), rootNode);
-        rootNode.set(EVIDENCE_ATTR_NAME, e().toObjectNode());
+        rootNode.set(EVIDENCE_ATTR_NAME, (ObjectNode) event.getArgumentArray()[0]);
         add(CONTEXT_ATTR_NAME, this.includeContextName, event.getLoggerContextVO().getName(), rootNode);
         addThrowableInfo(EXCEPTION_ATTR_NAME, this.includeException, event, rootNode);
     	
