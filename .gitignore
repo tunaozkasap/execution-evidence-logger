@@ -4,3 +4,5 @@ target
 bin
 build
 *.iml
+!.github/
+.github/java-upgrade/
