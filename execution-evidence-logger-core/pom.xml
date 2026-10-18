@@ -2,12 +2,13 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<groupId>com.github.tunaozkasap</groupId>
+		<groupId>io.github.tunaozkasap</groupId>
 		<artifactId>execution-evidence-logger-parent</artifactId>
-		<version>1.0-SNAPSHOT</version>
+		<version>1.0.0</version>
 	</parent>
 	<artifactId>execution-evidence-logger-core</artifactId>
 	<name>Execution Evidence Logger Core</name>
+	<description>Core of the Execution Evidence Logger: builds the per-thread JSON evidence and writes it, to the console by default. No logging framework dependency.</description>
 	<dependencies>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
