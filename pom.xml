@@ -1,11 +1,41 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd"
+	child.project.url.inherit.append.path="false">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>com.github.tunaozkasap</groupId>
+	<groupId>io.github.tunaozkasap</groupId>
 	<artifactId>execution-evidence-logger-parent</artifactId>
-	<version>1.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<packaging>pom</packaging>
 	<name>Execution Evidence Logger Parent</name>
+	<description>Gathers facts about an execution as one JSON evidence and logs it as a single structured log line.</description>
+	<url>https://github.com/tunaozkasap/execution-evidence-logger</url>
+	<!-- Metadata below is required by Maven Central and inherited by the modules -->
+	<licenses>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/licenses/MIT</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+	<developers>
+		<developer>
+			<id>tunaozkasap</id>
+			<name>Tuna Ozkasap</name>
+			<url>https://github.com/tunaozkasap</url>
+		</developer>
+	</developers>
+	<scm child.scm.connection.inherit.append.path="false"
+		child.scm.developerConnection.inherit.append.path="false"
+		child.scm.url.inherit.append.path="false">
+		<connection>scm:git:https://github.com/tunaozkasap/execution-evidence-logger.git</connection>
+		<developerConnection>scm:git:https://github.com/tunaozkasap/execution-evidence-logger.git</developerConnection>
+		<url>https://github.com/tunaozkasap/execution-evidence-logger</url>
+		<tag>HEAD</tag>
+	</scm>
+	<issueManagement>
+		<system>GitHub Issues</system>
+		<url>https://github.com/tunaozkasap/execution-evidence-logger/issues</url>
+	</issueManagement>
 	<modules>
 		<module>execution-evidence-logger-core</module>
 		<module>execution-evidence-logger-logback</module>
@@ -18,7 +48,7 @@
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
-				<groupId>com.github.tunaozkasap</groupId>
+				<groupId>io.github.tunaozkasap</groupId>
 				<artifactId>execution-evidence-logger-core</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -90,14 +120,28 @@
 		</plugins>
 	</build>
 	<profiles>
+		<!-- Release to Maven Central: mvn -P ci-cd clean deploy
+		     Needs the "central" server (Central Portal user token) in ~/.m2/settings.xml and a GPG key. -->
 		<profile>
 			<id>ci-cd</id>
 			<build>
 				<plugins>
 					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<version>0.12.0</version>
+						<extensions>true</extensions>
+						<configuration>
+							<publishingServerId>central</publishingServerId>
+							<!-- Upload and validate only; press Publish in the Central Portal to release -->
+							<autoPublish>false</autoPublish>
+							<waitUntil>validated</waitUntil>
+						</configuration>
+					</plugin>
+					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-gpg-plugin</artifactId>
-						<version>1.6</version>
+						<version>3.2.8</version>
 						<executions>
 							<execution>
 								<id>sign-artifacts</id>

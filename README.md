@@ -17,9 +17,9 @@ More extensions for other frameworks can be added the same way, see [Writing an 
 
 ```
 <dependency>
-    <groupId>com.github.tunaozkasap</groupId>
+    <groupId>io.github.tunaozkasap</groupId>
     <artifactId>execution-evidence-logger-core</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -130,9 +130,9 @@ Add the logback module next to logback-classic:
 
 ```
 <dependency>
-    <groupId>com.github.tunaozkasap</groupId>
+    <groupId>io.github.tunaozkasap</groupId>
     <artifactId>execution-evidence-logger-logback</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -199,5 +199,13 @@ When no writer is registered, or every registered writer fails to load, the cons
 ```
 mvn verify
 ```
+
+## Release to Maven Central
+
+Prerequisites: a `central` server with your Central Portal user token in `~/.m2/settings.xml`, and a GPG key whose public key is on a key server.
+
+1. Set a release version (no `-SNAPSHOT`) in all POMs.
+2. Run `mvn -P ci-cd clean deploy`. It signs the artifacts, uploads them to the Central Portal and waits for validation.
+3. Press **Publish** on the deployment in the Central Portal (central.sonatype.com).
 
 > ⚠️ This project requires Java 21 (LTS) to build and run. Make sure your JAVA_HOME or toolchain is set to a JDK 21 distribution.
