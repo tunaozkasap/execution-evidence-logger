@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Extensions register an implementation in {@code META-INF/services/com.github.tunaozkasap.execlog.EvidenceWriter}.
  * When several are registered the one with the highest {@link #priority()} is used. Without any registered writer
  * {@link ConsoleEvidenceWriter} is used. A writer can also be set explicitly via
- * {@link ExecutionEvidenceLogger#setWriter(EvidenceWriter)}.
+ * {@link EvidenceWriters#setWriter(EvidenceWriter)}.
  */
 public interface EvidenceWriter {
 

@@ -23,27 +23,106 @@ More extensions for other frameworks can be added the same way, see [Writing an 
 </dependency>
 ```
 
+`ScopedEvidence` is the only class you need. `s()` gives the evidence of the current thread:
+
 ```
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 ...
 public class UserManagementService {
     ...
     public void createUser(){
-        e().f("userValidation").kv("status", "success").kv("userId", 232323);
+        s().f("userValidation").kv("status", "success").kv("userId", 232323);
         ...
-        e().logNow();
+        s().logNow();
     }
 }
 ```
 `logNow()` writes the evidence and clears it from the current thread, so pooled threads (e.g. request threads) start the next execution with an empty evidence. With only the core module on the classpath the evidence JSON is printed to the console.
 
-If you don't want to log the evidence, `e().toString()` gives you the evidence as JSON string and `e().toObjectNode()` as JSON ObjectNode. In that case call `ExecutionEvidenceLogger.clear()` at the end of the execution yourself.
+If you don't want to log the evidence, `s().toString()` gives you the evidence as JSON string and `s().toObjectNode()` as JSON ObjectNode. In that case call `ScopedEvidence.clear()` at the end of the execution yourself.
 
 You can also send the evidence anywhere by setting a writer explicitly:
 
 ```
-ExecutionEvidenceLogger.setWriter(evidence -> myOutput.send(evidence.toString()));
+EvidenceWriters.setWriter(evidence -> myOutput.send(evidence.toString()));
 ```
+
+# Scope facts to the call stack
+
+You can open a fact as the *parent* for everything written further down the call stack. Methods write through `s()` without knowing which fact they belong to; parents opened inside a parent become its sub-facts, so the evidence follows the call tree.
+
+> ⚠️ **Always open a parent with try-with-resources.** The parent is then closed when the block ends, also when an exception is thrown. A parent that is never closed keeps collecting everything written afterwards in that execution.
+
+```
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
+...
+public class OrderController {
+    public void placeOrder(Order order) {
+        s().kv("orderId", order.getId());              // no parent open -> evidence root
+
+        try (var payment = s().parent("payment")) {    // "payment" is the root inside this block
+            paymentService.charge(order);
+        }                                              // closed here, even if charge() throws
+
+        s().kv("status", "placed");                    // evidence root again
+        s().logNow();
+    }
+}
+
+public class PaymentService {
+    public void charge(Order order) {
+        s().kv("amount", order.getTotal());            // -> payment.amount
+
+        try (var fraudCheck = s().parent("fraudCheck")) {
+            s().kv("score", fraudClient.score(order)); // -> payment.fraudCheck.score
+        }
+    }
+}
+```
+
+Logged evidence:
+
+```
+{"orderId":42,"payment":{"amount":99.5,"fraudCheck":{"score":0.12}},"status":"placed"}
+```
+
+The same method writes wherever it is called:
+
+```
+auditService.record();                      // s().kv("audited", true) -> {"audited":true}
+
+try (var refund = s().parent("refund")) {
+    auditService.record();                  // -> {"refund":{"audited":true}}
+}
+```
+
+To write to the evidence root while a parent is open, use `root()`:
+
+```
+try (var payment = s().parent("payment")) {
+    s().kv("amount", 10);                   // -> payment.amount
+    s().root().kv("userId", 7);             // -> userId
+}
+```
+
+Rules:
+- Opening a parent with a key that already exists under the current parent reuses that fact, it never creates a list.
+- `s().f("card")` creates a fact under the current parent without making it a parent.
+- After `logNow()` or `ScopedEvidence.clear()` the next execution starts with an empty evidence and no parent open, so a forgotten parent never leaks into the next request on a pooled thread.
+- Evidence and parents are per thread.
+
+If try-with-resources can't be used, `pushParent`/`popParent` do the same job, but the pop must be in a `finally` block:
+
+```
+s().pushParent("payment");
+try {
+    paymentService.charge(order);
+} finally {
+    s().popParent("payment");
+}
+```
+
+Closing an outer parent also closes inner parents that were left open, with a warning on `System.err`.
 
 # Use the logback extension
 
@@ -102,7 +181,10 @@ When you configured a logger named "com.github.tunaozkasap.execlog.ExecutionEvid
 
 In consequence, when you call logNow() then the evidence JSON will be output into the configured appenders.
 
-> ⚠️ Upgrading from the single module version: `LogbackEvidenceLayout` moved to the package `com.github.tunaozkasap.execlog.logback`, update the layout class in your logback configuration.
+> ⚠️ Upgrading from the single module version:
+> - `ExecutionEvidenceLogger.e()` is replaced by `ScopedEvidence.s()`; `e().kv(...)` inside an open parent becomes `s().root().kv(...)`.
+> - `ExecutionEvidenceLogger.clear()` is now `ScopedEvidence.clear()`, and `setWriter(...)` is on `EvidenceWriters`.
+> - `LogbackEvidenceLayout` moved to the package `com.github.tunaozkasap.execlog.logback`, update the layout class in your logback configuration. The logger name `com.github.tunaozkasap.execlog.ExecutionEvidenceLogger` is unchanged.
 
 # Writing an extension
 

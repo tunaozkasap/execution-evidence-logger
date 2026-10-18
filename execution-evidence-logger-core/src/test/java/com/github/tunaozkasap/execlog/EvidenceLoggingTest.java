@@ -1,6 +1,6 @@
 package com.github.tunaozkasap.execlog;
 
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -17,23 +17,23 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class ExecutionEvidenceLoggerTest {
+public class EvidenceLoggingTest {
 
 	private final List<String> written = Collections.synchronizedList(new ArrayList<>());
 
 	private void captureWrites() {
-		ExecutionEvidenceLogger.setWriter(evidence -> written.add(evidence.toString()));
+		EvidenceWriters.setWriter(evidence -> written.add(evidence.toString()));
 	}
 
 	@AfterEach
 	public void resetWriter() {
-		ExecutionEvidenceLogger.setWriter(null);
-		ExecutionEvidenceLogger.clear();
+		EvidenceWriters.setWriter(null);
+		ScopedEvidence.clear();
 	}
 
 	@Test
 	public void test_console_writer_is_used_without_extensions() {
-		Assertions.assertInstanceOf(ConsoleEvidenceWriter.class, ExecutionEvidenceLogger.discoverWriter());
+		Assertions.assertInstanceOf(ConsoleEvidenceWriter.class, EvidenceWriters.discover());
 	}
 
 	@Test
@@ -42,9 +42,9 @@ public class ExecutionEvidenceLoggerTest {
 		PrintStream originalOut = System.out;
 		System.setOut(new PrintStream(console, true));
 		try {
-			e().kv("userId", 23234l);
-			e().f("userValidation").kv("status", "success");
-			e().logNow();
+			s().kv("userId", 23234l);
+			s().f("userValidation").kv("status", "success");
+			s().logNow();
 		} finally {
 			System.setOut(originalOut);
 		}
@@ -55,8 +55,8 @@ public class ExecutionEvidenceLoggerTest {
 	public void test_explicit_writer_receives_evidence() {
 		captureWrites();
 
-		e().kv("userLoggedIn", true);
-		e().logNow();
+		s().kv("userLoggedIn", true);
+		s().logNow();
 
 		Assertions.assertEquals(List.of("{\"userLoggedIn\":true}"), written);
 	}
@@ -65,36 +65,36 @@ public class ExecutionEvidenceLoggerTest {
 	public void test_evidence_is_cleared_after_log_now() {
 		captureWrites();
 
-		e().kv("firstExecution", true);
-		e().logNow();
-		Assertions.assertEquals("{}", e().toString());
+		s().kv("firstExecution", true);
+		s().logNow();
+		Assertions.assertEquals("{}", s().toString());
 
-		e().kv("secondExecution", true);
-		e().logNow();
+		s().kv("secondExecution", true);
+		s().logNow();
 		Assertions.assertEquals(List.of("{\"firstExecution\":true}", "{\"secondExecution\":true}"), written);
 	}
 
 	@Test
 	public void test_failing_writer_does_not_break_execution_and_evidence_is_cleared() {
-		ExecutionEvidenceLogger.setWriter(evidence -> {
+		EvidenceWriters.setWriter(evidence -> {
 			throw new IllegalStateException("writer down");
 		});
 		PrintStream originalErr = System.err;
 		System.setErr(new PrintStream(new ByteArrayOutputStream(), true));
 		try {
-			e().kv("userId", 1);
-			Assertions.assertDoesNotThrow(() -> e().logNow());
+			s().kv("userId", 1);
+			Assertions.assertDoesNotThrow(() -> s().logNow());
 		} finally {
 			System.setErr(originalErr);
 		}
-		Assertions.assertEquals("{}", e().toString());
+		Assertions.assertEquals("{}", s().toString());
 	}
 
 	@Test
 	public void test_clear_discards_evidence() {
-		e().f("someFact").kv("status", "success");
-		ExecutionEvidenceLogger.clear();
-		Assertions.assertEquals("{}", e().toString());
+		s().f("someFact").kv("status", "success");
+		ScopedEvidence.clear();
+		Assertions.assertEquals("{}", s().toString());
 	}
 
 	@Test
@@ -110,13 +110,13 @@ public class ExecutionEvidenceLoggerTest {
 				Callable<String> buildEvidence = () -> {
 					startTogether.await();
 					for (int n = 0; n < iterations; n++) {
-						e().kv("threadNo", threadNo);
-						e().f("work").kv("iteration", n);
-						e().f("work").sf("detail").kv("owner", threadNo);
-						Assertions.assertEquals(threadNo, e().toObjectNode().get("threadNo").asInt());
+						s().kv("threadNo", threadNo);
+						s().f("work").kv("iteration", n);
+						s().f("work").sf("detail").kv("owner", threadNo);
+						Assertions.assertEquals(threadNo, s().toObjectNode().get("threadNo").asInt());
 					}
-					String evidence = e().toString();
-					ExecutionEvidenceLogger.clear();
+					String evidence = s().toString();
+					ScopedEvidence.clear();
 					return evidence;
 				};
 				results.add(executor.submit(buildEvidence));
@@ -136,14 +136,14 @@ public class ExecutionEvidenceLoggerTest {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		try {
 			executor.submit(() -> {
-				e().kv("firstTask", "secret");
-				e().logNow();
+				s().kv("firstTask", "secret");
+				s().logNow();
 			}).get();
 
 			String evidenceAtStart = executor.submit(() -> {
-				String atStart = e().toString();
-				e().kv("secondTask", true);
-				e().logNow();
+				String atStart = s().toString();
+				s().kv("secondTask", true);
+				s().logNow();
 				return atStart;
 			}).get();
 

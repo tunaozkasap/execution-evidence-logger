@@ -1,6 +1,6 @@
 package com.github.tunaozkasap.execlog.logback;
 
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
+import com.github.tunaozkasap.execlog.ScopedEvidence;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -47,7 +47,7 @@ public class LogbackEvidenceWriterTest {
         appender.setContext(lc);
         appender.setEncoder(encoder);
 
-        Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+        Logger evidenceLogger = (Logger)LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME);
         evidenceLogger.detachAndStopAllAppenders();
         evidenceLogger.addAppender(appender);
         evidenceLogger.setLevel(Level.INFO);
@@ -64,13 +64,13 @@ public class LogbackEvidenceWriterTest {
 	public void test_output_format() {
 		setupLogbackWithEvidenceLayout();
 
-		e().kv("userLoggedIn", true);
-		e().kv("userId", 23234l);
-		e().kv("userName", "Tuna");
-		e().kv("userAddress", new LinkedHashMap<String, Object>() {{put("streetName", "Norrebrogade 23");put("postCode", 232l);}});
-		e().kv("userDetails", objectMapper.createObjectNode().put("userAccount", "234234"));
+		s().kv("userLoggedIn", true);
+		s().kv("userId", 23234l);
+		s().kv("userName", "Tuna");
+		s().kv("userAddress", new LinkedHashMap<String, Object>() {{put("streetName", "Norrebrogade 23");put("postCode", 232l);}});
+		s().kv("userDetails", objectMapper.createObjectNode().put("userAccount", "234234"));
 
-		e().logNow();
+		s().logNow();
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"evidence\":{\"userLoggedIn\":true,\"userId\":23234,\"userName\":\"Tuna\",\"userAddress\":{\"streetName\":\"Norrebrogade 23\",\"postCode\":232},\"userDetails\":{\"userAccount\":\"234234\"}},\"context\":\"default\"}", this.getLogOutput());
 	}
 
@@ -78,13 +78,13 @@ public class LogbackEvidenceWriterTest {
 	public void test_evidence_is_cleared_after_log_now() {
 		setupLogbackWithEvidenceLayout();
 
-		e().kv("firstExecution", true);
-		e().logNow();
-		Assertions.assertEquals("{}", e().toString());
+		s().kv("firstExecution", true);
+		s().logNow();
+		Assertions.assertEquals("{}", s().toString());
 
 		byteArrayOutputStream.reset();
-		e().kv("secondExecution", true);
-		e().logNow();
+		s().kv("secondExecution", true);
+		s().logNow();
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"evidence\":{\"secondExecution\":true},\"context\":\"default\"}", this.getLogOutput());
 	}
 
@@ -92,7 +92,7 @@ public class LogbackEvidenceWriterTest {
 	public void test_non_evidence_event_is_logged_with_message() {
 		setupLogbackWithEvidenceLayout();
 
-		LoggerFactory.getLogger(ExecutionEvidenceLogger.class).error("Failed calling logback hook", new IllegalStateException("boom"));
+		LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME).error("Failed calling logback hook", new IllegalStateException("boom"));
 
 		String output = this.getLogOutput();
 		Assertions.assertTrue(output.startsWith("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"message\":\"Failed calling logback hook\",\"context\":\"default\",\"exception\":\"java.lang.IllegalStateException: boom"), output);
@@ -105,16 +105,16 @@ public class LogbackEvidenceWriterTest {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		try {
 			String firstTaskThread = executor.submit(() -> {
-				e().kv("firstTask", "secret");
-				e().logNow();
+				s().kv("firstTask", "secret");
+				s().logNow();
 				return Thread.currentThread().getName();
 			}).get();
 
 			byteArrayOutputStream.reset();
 			String[] secondTask = executor.submit(() -> {
-				String evidenceAtStart = e().toString();
-				e().kv("secondTask", true);
-				e().logNow();
+				String evidenceAtStart = s().toString();
+				s().kv("secondTask", true);
+				s().logNow();
 				return new String[] {Thread.currentThread().getName(), evidenceAtStart};
 			}).get();
 
@@ -131,7 +131,7 @@ public class LogbackEvidenceWriterTest {
 	@Test
 	public void test_concurrent_hook_registers_one_appender() throws Exception {
 		int threadCount = 16;
-		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME);
 		Field alreadyHooked = LogbackHook.class.getDeclaredField("alreadyHooked");
 		alreadyHooked.setAccessible(true);
 		CyclicBarrier startTogether = new CyclicBarrier(threadCount);

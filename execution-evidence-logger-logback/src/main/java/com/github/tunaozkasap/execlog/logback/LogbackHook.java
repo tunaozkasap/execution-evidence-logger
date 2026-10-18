@@ -4,7 +4,6 @@ import java.util.Iterator;
 
 import org.slf4j.LoggerFactory;
 
-import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
@@ -26,7 +25,7 @@ public class LogbackHook {
 				return;
 			}
 			// SLF4J may be bound to another framework even though logback is on the classpath
-			if(!(LoggerFactory.getLogger(ExecutionEvidenceLogger.class) instanceof Logger evidenceLogger)) {
+			if(!(LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME) instanceof Logger evidenceLogger)) {
 				alreadyHooked = true;
 				return;
 			}
