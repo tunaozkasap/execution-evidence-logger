@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>io.github.tunaozkasap</groupId>
 		<artifactId>execution-evidence-logger-parent</artifactId>
-		<version>1.0.0</version>
+		<version>1.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>execution-evidence-logger-core</artifactId>
 	<name>Execution Evidence Logger Core</name>

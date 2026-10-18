@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.github.tunaozkasap</groupId>
 	<artifactId>execution-evidence-logger-parent</artifactId>
-	<version>1.0.0</version>
+	<version>1.0.1-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<name>Execution Evidence Logger Parent</name>
 	<description>Gathers facts about an execution as one JSON evidence and logs it as a single structured log line.</description>
