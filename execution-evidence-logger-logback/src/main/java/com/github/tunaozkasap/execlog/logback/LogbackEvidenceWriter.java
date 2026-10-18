@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.tunaozkasap.execlog.EvidenceWriter;
-import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
 
 /**
  * Writes the evidence through the logback logger named {@code com.github.tunaozkasap.execlog.ExecutionEvidenceLogger}.
@@ -15,9 +14,14 @@ import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
 public class LogbackEvidenceWriter implements EvidenceWriter {
 
 	public static final int PRIORITY = 100;
+	
+	/**
+	 * Name of the logback logger the evidence is written to. Kept from the earlier ExecutionEvidenceLogger class,
+	 * so existing logback configurations keep working.
+	 */
+	public static final String LOGGER_NAME = "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger";
 
-	// Logger name kept as the core class name, so existing logback configurations keep working
-	private static final Logger log = LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+	private static final Logger log = LoggerFactory.getLogger(LOGGER_NAME);
 
 	@Override
 	public void write(ObjectNode evidence) {

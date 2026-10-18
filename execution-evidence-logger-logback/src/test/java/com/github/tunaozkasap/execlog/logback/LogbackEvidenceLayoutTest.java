@@ -1,6 +1,6 @@
 package com.github.tunaozkasap.execlog.logback;
 
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 import java.io.ByteArrayOutputStream;
 
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
+import com.github.tunaozkasap.execlog.ScopedEvidence;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -29,7 +29,7 @@ public class LogbackEvidenceLayoutTest {
 	@AfterEach
 	public void cleanUp() {
 		MDC.clear();
-		ExecutionEvidenceLogger.clear();
+		ScopedEvidence.clear();
 	}
 
 	/**
@@ -50,7 +50,7 @@ public class LogbackEvidenceLayoutTest {
 		appender.setContext(lc);
 		appender.setEncoder(encoder);
 
-		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME);
 		evidenceLogger.detachAndStopAllAppenders();
 		evidenceLogger.addAppender(appender);
 		evidenceLogger.setLevel(Level.INFO);
@@ -65,7 +65,7 @@ public class LogbackEvidenceLayoutTest {
 	}
 
 	private String layoutEventAt(LogbackEvidenceLayout layout, long timestamp) {
-		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME);
 		LoggingEvent event = new LoggingEvent(Logger.class.getName(), evidenceLogger, Level.INFO, "hello", null, null);
 		event.setTimeStamp(timestamp);
 		return layout.doLayout(event);
@@ -99,8 +99,8 @@ public class LogbackEvidenceLayoutTest {
 		layout.setTimestampFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 		layout.setTimestampFormatTimezoneId("UTC");
 
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 
 		String output = this.getLogOutput();
 		Assertions.assertTrue(output.matches("\\{\"timestamp\":\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z\",\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":\\{\"userId\":42\\},\"context\":\"default\"\\}"), output);
@@ -111,8 +111,8 @@ public class LogbackEvidenceLayoutTest {
 		setupLogbackWithEvidenceLayout();
 		MDC.put("requestId", "req-1");
 
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 
 		Assertions.assertEquals("{\"thread\":\"main\",\"mdc\":{\"requestId\":\"req-1\"},\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":{\"userId\":42},\"context\":\"default\"}", this.getLogOutput());
 	}
@@ -122,8 +122,8 @@ public class LogbackEvidenceLayoutTest {
 		setupLogbackWithEvidenceLayout().setIncludeMDC(false);
 		MDC.put("requestId", "req-1");
 
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":{\"userId\":42},\"context\":\"default\"}", this.getLogOutput());
 	}
@@ -133,20 +133,20 @@ public class LogbackEvidenceLayoutTest {
 		LogbackEvidenceLayout layout = setupLogbackWithEvidenceLayout();
 
 		layout.setIncludeThreadName(false);
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 		Assertions.assertEquals("{\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":{\"userId\":42},\"context\":\"default\"}", this.getLogOutput());
 
 		byteArrayOutputStream.reset();
 		layout.setIncludeLoggerName(false);
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 		Assertions.assertEquals("{\"evidence\":{\"userId\":42},\"context\":\"default\"}", this.getLogOutput());
 
 		byteArrayOutputStream.reset();
 		layout.setIncludeContextName(false);
-		e().kv("userId", 42);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
 		Assertions.assertEquals("{\"evidence\":{\"userId\":42}}", this.getLogOutput());
 	}
 
@@ -154,10 +154,10 @@ public class LogbackEvidenceLayoutTest {
 	public void test_append_line_separator() {
 		setupLogbackWithEvidenceLayout().setAppendLineSeparator(true);
 
-		e().kv("userId", 42);
-		e().logNow();
-		e().kv("userId", 43);
-		e().logNow();
+		s().kv("userId", 42);
+		s().logNow();
+		s().kv("userId", 43);
+		s().logNow();
 
 		String lineSeparator = System.lineSeparator();
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":{\"userId\":42},\"context\":\"default\"}" + lineSeparator
@@ -168,7 +168,7 @@ public class LogbackEvidenceLayoutTest {
 	public void test_formatted_message_can_be_excluded_on_non_evidence_event() {
 		setupLogbackWithEvidenceLayout().setIncludeFormattedMessage(false);
 
-		LoggerFactory.getLogger(ExecutionEvidenceLogger.class).info("Not an evidence line for {}", "someone");
+		LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME).info("Not an evidence line for {}", "someone");
 
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"context\":\"default\"}", this.getLogOutput());
 	}
@@ -177,7 +177,7 @@ public class LogbackEvidenceLayoutTest {
 	public void test_formatted_message_is_included_on_non_evidence_event() {
 		setupLogbackWithEvidenceLayout();
 
-		LoggerFactory.getLogger(ExecutionEvidenceLogger.class).info("Not an evidence line for {}", "someone");
+		LoggerFactory.getLogger(LogbackEvidenceWriter.LOGGER_NAME).info("Not an evidence line for {}", "someone");
 
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"message\":\"Not an evidence line for someone\",\"context\":\"default\"}", this.getLogOutput());
 	}
@@ -186,9 +186,9 @@ public class LogbackEvidenceLayoutTest {
 	public void test_facts_are_logged_inside_evidence() {
 		setupLogbackWithEvidenceLayout();
 
-		e().kv("userId", 42);
-		e().f("payment").kv("status", "success").sf("card").kv("brand", "visa");
-		e().logNow();
+		s().kv("userId", 42);
+		s().f("payment").kv("status", "success").sf("card").kv("brand", "visa");
+		s().logNow();
 
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"" + LOGGER_NAME + "\",\"evidence\":{\"userId\":42,\"payment\":{\"status\":\"success\",\"card\":{\"brand\":\"visa\"}}},\"context\":\"default\"}", this.getLogOutput());
 	}

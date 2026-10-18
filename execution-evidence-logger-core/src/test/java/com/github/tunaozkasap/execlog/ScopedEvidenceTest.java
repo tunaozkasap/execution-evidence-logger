@@ -1,6 +1,5 @@
 package com.github.tunaozkasap.execlog;
 
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
 import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 import java.io.ByteArrayOutputStream;
@@ -26,8 +25,8 @@ public class ScopedEvidenceTest {
 
 	@BeforeEach
 	public void setUp() {
-		ExecutionEvidenceLogger.clear();
-		ExecutionEvidenceLogger.setWriter(evidence -> written.add(evidence.toString()));
+		ScopedEvidence.clear();
+		EvidenceWriters.setWriter(evidence -> written.add(evidence.toString()));
 		originalErr = System.err;
 		System.setErr(new PrintStream(err, true));
 	}
@@ -35,8 +34,8 @@ public class ScopedEvidenceTest {
 	@AfterEach
 	public void tearDown() {
 		System.setErr(originalErr);
-		ExecutionEvidenceLogger.setWriter(null);
-		ExecutionEvidenceLogger.clear();
+		EvidenceWriters.setWriter(null);
+		ScopedEvidence.clear();
 	}
 
 	// Library-user style code: these methods know nothing about the parent they are called under
@@ -62,7 +61,7 @@ public class ScopedEvidenceTest {
 		s().kv("orderId", 42);
 		s().f("payment").kv("status", "success");
 
-		Assertions.assertEquals("{\"orderId\":42,\"payment\":{\"status\":\"success\"}}", e().toString());
+		Assertions.assertEquals("{\"orderId\":42,\"payment\":{\"status\":\"success\"}}", s().toString());
 	}
 
 	@Test
@@ -72,7 +71,7 @@ public class ScopedEvidenceTest {
 			chargePayment();
 		}
 		s().kv("status", "placed");
-		e().logNow();
+		s().logNow();
 
 		Assertions.assertEquals(List.of("{\"orderId\":42,\"payment\":{\"amount\":99.5,\"fraudCheck\":{\"score\":0.12},\"result\":\"charged\"},\"status\":\"placed\"}"), written);
 	}
@@ -84,7 +83,7 @@ public class ScopedEvidenceTest {
 			audit();
 		}
 
-		Assertions.assertEquals("{\"audited\":true,\"refund\":{\"audited\":true}}", e().toString());
+		Assertions.assertEquals("{\"audited\":true,\"refund\":{\"audited\":true}}", s().toString());
 	}
 
 	@Test
@@ -96,7 +95,7 @@ public class ScopedEvidenceTest {
 			}
 		}
 
-		Assertions.assertEquals("{\"payment\":{\"attempt\":2,\"lastAttemptOnly0\":true,\"lastAttemptOnly1\":true,\"lastAttemptOnly\":true}}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"attempt\":2,\"lastAttemptOnly0\":true,\"lastAttemptOnly1\":true,\"lastAttemptOnly\":true}}", s().toString());
 	}
 
 	@Test
@@ -106,17 +105,32 @@ public class ScopedEvidenceTest {
 			payment.kv("provider", "stripe");
 		}
 
-		Assertions.assertEquals("{\"payment\":{\"card\":{\"brand\":\"visa\"},\"provider\":\"stripe\"}}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"card\":{\"brand\":\"visa\"},\"provider\":\"stripe\"}}", s().toString());
 	}
 
 	@Test
-	public void test_e_ignores_open_parent() {
+	public void test_root_ignores_open_parent() {
 		try (var payment = s().parent("payment")) {
-			e().kv("userId", 7);
+			try (var fraudCheck = s().parent("fraudCheck")) {
+				s().root().kv("userId", 7).f("session").kv("id", "s-1");
+				s().kv("score", 0.12);
+			}
 			s().kv("amount", 10);
 		}
 
-		Assertions.assertEquals("{\"payment\":{\"amount\":10},\"userId\":7}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"fraudCheck\":{\"score\":0.12},\"amount\":10},\"userId\":7,\"session\":{\"id\":\"s-1\"}}", s().toString());
+	}
+
+	@Test
+	public void test_clear_discards_evidence_and_open_parents() {
+		s().pushParent("payment");
+		s().kv("amount", 10);
+		ScopedEvidence.clear();
+
+		s().kv("orderId", 43);
+
+		Assertions.assertEquals("[]", s().openParentKeys());
+		Assertions.assertEquals("{\"orderId\":43}", s().toString());
 	}
 
 	@Test
@@ -130,7 +144,7 @@ public class ScopedEvidenceTest {
 		s().kv("status", "failed");
 
 		Assertions.assertEquals("[]", s().openParentKeys());
-		Assertions.assertEquals("{\"payment\":{\"amount\":10},\"status\":\"failed\"}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"amount\":10},\"status\":\"failed\"}", s().toString());
 	}
 
 	@Test
@@ -155,7 +169,7 @@ public class ScopedEvidenceTest {
 		}
 		s().kv("status", "placed");
 
-		Assertions.assertEquals("{\"payment\":{\"amount\":99.5,\"fraudCheck\":{\"score\":0.12},\"result\":\"charged\"},\"status\":\"placed\"}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"amount\":99.5,\"fraudCheck\":{\"score\":0.12},\"result\":\"charged\"},\"status\":\"placed\"}", s().toString());
 	}
 
 	@Test
@@ -166,7 +180,7 @@ public class ScopedEvidenceTest {
 		}
 		s().kv("status", "placed");
 
-		Assertions.assertEquals("{\"payment\":{\"fraudCheck\":{\"score\":0.12}},\"status\":\"placed\"}", e().toString());
+		Assertions.assertEquals("{\"payment\":{\"fraudCheck\":{\"score\":0.12}},\"status\":\"placed\"}", s().toString());
 		Assertions.assertTrue(err.toString().contains("parent \"fraudCheck\" was not closed before \"payment\""), err.toString());
 	}
 
@@ -183,10 +197,10 @@ public class ScopedEvidenceTest {
 	public void test_forgotten_parent_does_not_leak_into_next_execution() {
 		s().pushParent("payment");   // never popped
 		s().kv("amount", 10);
-		e().logNow();
+		s().logNow();
 
 		s().kv("orderId", 43);
-		e().logNow();
+		s().logNow();
 
 		Assertions.assertEquals(List.of("{\"payment\":{\"amount\":10}}", "{\"orderId\":43}"), written);
 	}
@@ -195,13 +209,13 @@ public class ScopedEvidenceTest {
 	public void test_scope_closed_after_log_now_has_no_effect_on_next_execution() {
 		try (var payment = s().parent("payment")) {
 			s().kv("amount", 10);
-			e().logNow();
+			s().logNow();
 			try (var refund = s().parent("refund")) {
 				s().kv("reason", "duplicate");
 			}
 		}
 
-		Assertions.assertEquals("{\"refund\":{\"reason\":\"duplicate\"}}", e().toString());
+		Assertions.assertEquals("{\"refund\":{\"reason\":\"duplicate\"}}", s().toString());
 		Assertions.assertEquals("", err.toString());
 	}
 
@@ -221,8 +235,8 @@ public class ScopedEvidenceTest {
 							s().kv("n", n);
 						}
 					}
-					String evidence = e().toString();
-					ExecutionEvidenceLogger.clear();
+					String evidence = s().toString();
+					ScopedEvidence.clear();
 					return evidence;
 				}));
 			}
