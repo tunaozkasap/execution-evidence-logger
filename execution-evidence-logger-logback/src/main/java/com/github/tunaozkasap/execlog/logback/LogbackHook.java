@@ -1,8 +1,10 @@
-package com.github.tunaozkasap.execlog;
+package com.github.tunaozkasap.execlog.logback;
 
 import java.util.Iterator;
 
 import org.slf4j.LoggerFactory;
+
+import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
@@ -23,7 +25,11 @@ public class LogbackHook {
 			if(alreadyHooked) {
 				return;
 			}
-			Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+			// SLF4J may be bound to another framework even though logback is on the classpath
+			if(!(LoggerFactory.getLogger(ExecutionEvidenceLogger.class) instanceof Logger evidenceLogger)) {
+				alreadyHooked = true;
+				return;
+			}
 			evidenceLogger.setAdditive(false);
 			Iterator<Appender<ILoggingEvent>> iteratorForAppenders = evidenceLogger.iteratorForAppenders();
 			if(!iteratorForAppenders.hasNext()) {

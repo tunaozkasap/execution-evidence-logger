@@ -1,4 +1,4 @@
-package com.github.tunaozkasap.execlog;
+package com.github.tunaozkasap.execlog.logback;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
