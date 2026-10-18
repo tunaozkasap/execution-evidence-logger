@@ -45,6 +45,76 @@ You can also send the evidence anywhere by setting a writer explicitly:
 ExecutionEvidenceLogger.setWriter(evidence -> myOutput.send(evidence.toString()));
 ```
 
+# Scope facts to the call stack with ScopedEvidence
+
+`ScopedEvidence` (in the core module) lets you open a fact as the *parent* for everything written further down the call stack. Methods write through `s()` without knowing which fact they belong to; parents opened inside a parent become its sub-facts, so the evidence follows the call tree.
+
+> ⚠️ **Always open a parent with try-with-resources.** The parent is then closed when the block ends, also when an exception is thrown. A parent that is never closed keeps collecting everything written afterwards in that execution.
+
+```
+import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
+...
+public class OrderController {
+    public void placeOrder(Order order) {
+        s().kv("orderId", order.getId());              // no parent open -> evidence root
+
+        try (var payment = s().parent("payment")) {    // "payment" is the root inside this block
+            paymentService.charge(order);
+        }                                              // closed here, even if charge() throws
+
+        s().kv("status", "placed");                    // evidence root again
+        e().logNow();
+    }
+}
+
+public class PaymentService {
+    public void charge(Order order) {
+        s().kv("amount", order.getTotal());            // -> payment.amount
+
+        try (var fraudCheck = s().parent("fraudCheck")) {
+            s().kv("score", fraudClient.score(order)); // -> payment.fraudCheck.score
+        }
+    }
+}
+```
+
+Logged evidence:
+
+```
+{"orderId":42,"payment":{"amount":99.5,"fraudCheck":{"score":0.12}},"status":"placed"}
+```
+
+The same method writes wherever it is called:
+
+```
+auditService.record();                      // s().kv("audited", true) -> {"audited":true}
+
+try (var refund = s().parent("refund")) {
+    auditService.record();                  // -> {"refund":{"audited":true}}
+}
+```
+
+Rules:
+- Opening a parent with a key that already exists under the current parent reuses that fact, it never creates a list.
+- `s().f("card")` creates a fact under the current parent without making it a parent.
+- `e()` is unaffected and always writes to the evidence root.
+- After `logNow()` or `ExecutionEvidenceLogger.clear()` the next execution starts with no parent open, so a forgotten parent never leaks into the next request on a pooled thread.
+- Parents are per thread, like the evidence itself.
+
+If try-with-resources can't be used, `pushParent`/`popParent` do the same job, but the pop must be in a `finally` block:
+
+```
+s().pushParent("payment");
+try {
+    paymentService.charge(order);
+} finally {
+    s().popParent("payment");
+}
+```
+
+Closing an outer parent also closes inner parents that were left open, with a warning on `System.err`.
+
 # Use the logback extension
 
 Add the logback module next to logback-classic:
