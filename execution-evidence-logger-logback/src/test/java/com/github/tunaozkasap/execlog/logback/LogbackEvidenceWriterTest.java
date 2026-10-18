@@ -1,4 +1,4 @@
-package com.github.tunaozkasap.execlog;
+package com.github.tunaozkasap.execlog.logback;
 
 import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
 
@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tunaozkasap.execlog.ExecutionEvidenceLogger;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -28,48 +28,48 @@ import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.OutputStreamAppender;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 
-public class ExecutionEvidenceLoggerTest {
-	
+public class LogbackEvidenceWriterTest {
+
 	private static ObjectMapper objectMapper = new ObjectMapper();
 	private ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-	
+
 	public void setupLogbackWithEvidenceLayout() {
 		LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
-		
+
 		LogbackEvidenceLayout evidenceLayout = new LogbackEvidenceLayout();
 		evidenceLayout.setIncludeTimestamp(false);
-		
+
 		LayoutWrappingEncoder<ILoggingEvent> encoder = new LayoutWrappingEncoder<>();
 		encoder.setLayout(evidenceLayout);
-		
+
         OutputStreamAppender<ILoggingEvent> appender = new OutputStreamAppender<>();
         appender.setOutputStream(byteArrayOutputStream);
         appender.setContext(lc);
         appender.setEncoder(encoder);
-        
+
         Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
         evidenceLogger.detachAndStopAllAppenders();
         evidenceLogger.addAppender(appender);
         evidenceLogger.setLevel(Level.INFO);
         evidenceLogger.setAdditive(false);
-        
+
         appender.start();
 	}
-	
+
 	public String getLogOutput() {
 		return new String(byteArrayOutputStream.toByteArray());
 	}
-	
+
 	@Test
 	public void test_output_format() {
 		setupLogbackWithEvidenceLayout();
-		
+
 		e().kv("userLoggedIn", true);
 		e().kv("userId", 23234l);
 		e().kv("userName", "Tuna");
 		e().kv("userAddress", new LinkedHashMap<String, Object>() {{put("streetName", "Norrebrogade 23");put("postCode", 232l);}});
 		e().kv("userDetails", objectMapper.createObjectNode().put("userAccount", "234234"));
-		
+
 		e().logNow();
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"evidence\":{\"userLoggedIn\":true,\"userId\":23234,\"userName\":\"Tuna\",\"userAddress\":{\"streetName\":\"Norrebrogade 23\",\"postCode\":232},\"userDetails\":{\"userAccount\":\"234234\"}},\"context\":\"default\"}", this.getLogOutput());
 	}
@@ -89,13 +89,6 @@ public class ExecutionEvidenceLoggerTest {
 	}
 
 	@Test
-	public void test_clear_discards_evidence() {
-		e().f("someFact").kv("status", "success");
-		ExecutionEvidenceLogger.clear();
-		Assertions.assertEquals("{}", e().toString());
-	}
-
-	@Test
 	public void test_non_evidence_event_is_logged_with_message() {
 		setupLogbackWithEvidenceLayout();
 
@@ -104,39 +97,6 @@ public class ExecutionEvidenceLoggerTest {
 		String output = this.getLogOutput();
 		Assertions.assertTrue(output.startsWith("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"message\":\"Failed calling logback hook\",\"context\":\"default\",\"exception\":\"java.lang.IllegalStateException: boom"), output);
 		Assertions.assertFalse(output.contains("\"evidence\""), output);
-	}
-
-	@Test
-	public void test_threads_do_not_share_evidence() throws Exception {
-		int threadCount = 8;
-		int iterations = 1000;
-		CyclicBarrier startTogether = new CyclicBarrier(threadCount);
-		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-		try {
-			List<Future<String>> results = new ArrayList<>();
-			for (int i = 0; i < threadCount; i++) {
-				int threadNo = i;
-				Callable<String> buildEvidence = () -> {
-					startTogether.await();
-					for (int n = 0; n < iterations; n++) {
-						e().kv("threadNo", threadNo);
-						e().f("work").kv("iteration", n);
-						e().f("work").sf("detail").kv("owner", threadNo);
-						Assertions.assertEquals(threadNo, e().toObjectNode().get("threadNo").asInt());
-					}
-					String evidence = e().toString();
-					ExecutionEvidenceLogger.clear();
-					return evidence;
-				};
-				results.add(executor.submit(buildEvidence));
-			}
-
-			for (int i = 0; i < threadCount; i++) {
-				Assertions.assertEquals("{\"threadNo\":" + i + ",\"work\":{\"iteration\":" + (iterations - 1) + ",\"detail\":{\"owner\":" + i + "}}}", results.get(i).get());
-			}
-		} finally {
-			executor.shutdownNow();
-		}
 	}
 
 	@Test
@@ -205,5 +165,4 @@ public class ExecutionEvidenceLoggerTest {
 			evidenceLogger.detachAndStopAllAppenders();
 		}
 	}
-
 }

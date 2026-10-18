@@ -2,38 +2,48 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.tunaozkasap</groupId>
-	<artifactId>execution-evidence-logger</artifactId>
+	<artifactId>execution-evidence-logger-parent</artifactId>
 	<version>1.0-SNAPSHOT</version>
-	<name>Execution Evidence Logger</name>
+	<packaging>pom</packaging>
+	<name>Execution Evidence Logger Parent</name>
+	<modules>
+		<module>execution-evidence-logger-core</module>
+		<module>execution-evidence-logger-logback</module>
+	</modules>
 	<properties>
 		<!-- Centralized Java version property -->
 		<java.version>21</java.version>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
-	<dependencies>
-		<dependency>
-		    <groupId>org.projectlombok</groupId>
-		    <artifactId>lombok</artifactId>
-		    <version>1.18.42</version>
-		    <scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>ch.qos.logback</groupId>
-			<artifactId>logback-classic</artifactId>
-			<version>1.5.21</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-			<version>2.19.0</version>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter-engine</artifactId>
-			<version>5.14.1</version>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.github.tunaozkasap</groupId>
+				<artifactId>execution-evidence-logger-core</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<version>1.18.42</version>
+			</dependency>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-classic</artifactId>
+				<version>1.5.21</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-databind</artifactId>
+				<version>2.19.0</version>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-engine</artifactId>
+				<version>5.14.1</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<build>
 		<plugins>
 			<plugin>
@@ -96,7 +106,7 @@
 									<goal>sign</goal>
 								</goals>
 								<configuration>
-									<!-- Prevent gpg from using pinentry programs. Fixes: gpg: signing 
+									<!-- Prevent gpg from using pinentry programs. Fixes: gpg: signing
                                         failed: Inappropriate ioctl for device -->
 									<gpgArguments>
 										<arg>--pinentry-mode</arg>
@@ -110,4 +120,4 @@
 			</build>
 		</profile>
 	</profiles>
-</project>
+</project>

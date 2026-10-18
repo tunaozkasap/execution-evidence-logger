@@ -4,9 +4,24 @@ Purpose of this library is twofold;
 1. To gather facts (in memory) that will create an evidence object and to log that evidence as a JSON as a log line.
 2. Facts are key-value pairs that can be easily used to analyze log data, as a result this library aims to reduce text logging which is hard to analyze.
 
-# Use the logger standalone
+# Modules
 
-If you want to use the logger standalone, then you can just to the following.
+| Module | Purpose |
+| --- | --- |
+| `execution-evidence-logger-core` | Gathers the evidence and writes it. Without any extension the JSON is printed to the console with `System.out.println`. No logging framework dependency. |
+| `execution-evidence-logger-logback` | Writes the evidence through logback, using `LogbackEvidenceLayout`. |
+
+More extensions for other frameworks can be added the same way, see [Writing an extension](#writing-an-extension).
+
+# Use the core module
+
+```
+<dependency>
+    <groupId>com.github.tunaozkasap</groupId>
+    <artifactId>execution-evidence-logger-core</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
 
 ```
 import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
@@ -16,28 +31,45 @@ public class UserManagementService {
     public void createUser(){
         e().f("userValidation").kv("status", "success").kv("userId", 232323);
         ...
-        e().toString();
+        e().logNow();
     }
 }
 ```
-Here toString method of ExecutionEvidenceLogger will give you the evidence as JSON string. Alternatively you can call toObjectNode method of ExecutionEvidenceLogger and that will give you the evidence as JSON ObjectNode.
+`logNow()` writes the evidence and clears it from the current thread, so pooled threads (e.g. request threads) start the next execution with an empty evidence. With only the core module on the classpath the evidence JSON is printed to the console.
 
-# Use the logger with logback
+If you don't want to log the evidence, `e().toString()` gives you the evidence as JSON string and `e().toObjectNode()` as JSON ObjectNode. In that case call `ExecutionEvidenceLogger.clear()` at the end of the execution yourself.
 
-If you want to use the logger with logback, then you should have logback-classic artifact in your classpath.
-There are two ways of making it work with logback
+You can also send the evidence anywhere by setting a writer explicitly:
 
-## Have logback-classic artifact in your classpath
+```
+ExecutionEvidenceLogger.setWriter(evidence -> myOutput.send(evidence.toString()));
+```
 
-When you have logback-classic artifact on your classpath and you did not configure a logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger" in your logback configuration then ExecutionEvidenceLogger will; 
+# Use the logback extension
+
+Add the logback module next to logback-classic:
+
+```
+<dependency>
+    <groupId>com.github.tunaozkasap</groupId>
+    <artifactId>execution-evidence-logger-logback</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+Having the module on the classpath is enough, it is picked up automatically. Evidence is logged through the logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger".
+
+## Without logback configuration
+
+When you did not configure a logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger" in your logback configuration then the extension will;
 1.  Create a logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger"
 2.  Register ConsoleAppender to this logger using layout LogbackEvidenceLayout
 
-As a consequence, whenever you call ExecutionEvidenceLogger.logNow() JSON output will be written to console.
+As a consequence, whenever you call logNow() JSON output will be written to console.
 
-## Have logback-classic artifact in your classpath and configure logback
+## With logback configuration
 
-When you have logback-classic artifact on your classpath and you configured a logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger" then the configured logger in your configuration will be used. Sample configuration is depicted below;
+When you configured a logger named "com.github.tunaozkasap.execlog.ExecutionEvidenceLogger" then the configured logger in your configuration will be used. Sample configuration is depicted below;
 
 ```
 <configuration debug="true">
@@ -55,7 +87,7 @@ When you have logback-classic artifact on your classpath and you configured a lo
         <file>tests.log</file>
         <append>true</append>
         <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-	         <layout class="com.github.tunaozkasap.execlog.LogbackEvidenceLayout">
+	         <layout class="com.github.tunaozkasap.execlog.logback.LogbackEvidenceLayout">
 	             <includeThreadName>true</includeThreadName>
 	         </layout>
 	    </encoder>
@@ -68,19 +100,22 @@ When you have logback-classic artifact on your classpath and you configured a lo
 </configuration>
 ```
 
+In consequence, when you call logNow() then the evidence JSON will be output into the configured appenders.
 
-In consequence, when you call ExecutionEvidenceLogger.logNow() then the evidence JSON will be output into the configured appenders.
+> ⚠️ Upgrading from the single module version: `LogbackEvidenceLayout` moved to the package `com.github.tunaozkasap.execlog.logback`, update the layout class in your logback configuration.
+
+# Writing an extension
+
+1. Create a module depending on `execution-evidence-logger-core`.
+2. Implement `com.github.tunaozkasap.execlog.EvidenceWriter`. Return a `priority()` higher than 0 so it is preferred when several writers are on the classpath (the logback writer uses 100).
+3. Register it in `src/main/resources/META-INF/services/com.github.tunaozkasap.execlog.EvidenceWriter`.
+
+When no writer is registered, or every registered writer fails to load, the console writer is used.
+
+# Build
 
 ```
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
-...
-public class UserManagementService {
-    ...
-    public void createUser(){
-        e().f("userValidation").kv("status", "success").kv("userId", 232323);
-        ...
-        e().logNow();
-    }
-}
+mvn verify
 ```
+
 > ⚠️ This project requires Java 21 (LTS) to build and run. Make sure your JAVA_HOME or toolchain is set to a JDK 21 distribution.
