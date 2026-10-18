@@ -83,3 +83,4 @@ public class UserManagementService {
     }
 }
 ```
+> ⚠️ This project requires Java 21 (LTS) to build and run. Make sure your JAVA_HOME or toolchain is set to a JDK 21 distribution.

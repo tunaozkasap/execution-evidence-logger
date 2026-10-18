@@ -1,20 +1,14 @@
 package com.github.tunaozkasap.execlog;
 
-import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
-
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 import java.util.TimeZone;
 
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.pattern.ThrowableProxyConverter;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.IThrowableProxy;
@@ -34,6 +28,7 @@ public class LogbackEvidenceLayout extends LayoutBase<ILoggingEvent> {
     public static final String MDC_ATTR_NAME = "mdc";
     public static final String LOGGER_ATTR_NAME = "logger";
     public static final String EVIDENCE_ATTR_NAME = "evidence";
+    public static final String MESSAGE_ATTR_NAME = "message";
     public static final String EXCEPTION_ATTR_NAME = "exception";
     public static final String CONTEXT_ATTR_NAME = "context";
     public final static String CONTENT_TYPE = "application/json";
@@ -85,7 +80,13 @@ public class LogbackEvidenceLayout extends LayoutBase<ILoggingEvent> {
         add(THREAD_ATTR_NAME, this.includeThreadName, event.getThreadName(), rootNode);
         addMap(MDC_ATTR_NAME, this.includeMDC, event.getMDCPropertyMap(), rootNode);
         add(LOGGER_ATTR_NAME, this.includeLoggerName, event.getLoggerName(), rootNode);
-        rootNode.set(EVIDENCE_ATTR_NAME, (ObjectNode) event.getArgumentArray()[0]);
+        ObjectNode evidence = findEvidence(event);
+        if (evidence != null) {
+        	rootNode.set(EVIDENCE_ATTR_NAME, evidence);
+        } else {
+        	// Not an evidence log line, e.g. a library error logged through the same logger
+        	add(MESSAGE_ATTR_NAME, this.includeFormattedMessage, event.getFormattedMessage(), rootNode);
+        }
         add(CONTEXT_ATTR_NAME, this.includeContextName, event.getLoggerContextVO().getName(), rootNode);
         addThrowableInfo(EXCEPTION_ATTR_NAME, this.includeException, event, rootNode);
     	
@@ -93,6 +94,14 @@ public class LogbackEvidenceLayout extends LayoutBase<ILoggingEvent> {
         return isAppendLineSeparator() ? result + CoreConstants.LINE_SEPARATOR : result;
     }
     
+    protected ObjectNode findEvidence(ILoggingEvent event) {
+    	Object[] arguments = event.getArgumentArray();
+    	if (arguments != null && arguments.length > 0 && arguments[0] instanceof ObjectNode evidence) {
+    		return evidence;
+    	}
+    	return null;
+    }
+
     protected void addThrowableInfo(String fieldName, boolean fieldIsIncluded, ILoggingEvent value, ObjectNode rootNode) {
         if (fieldIsIncluded && value != null) {
             IThrowableProxy throwableProxy = value.getThrowableProxy();
