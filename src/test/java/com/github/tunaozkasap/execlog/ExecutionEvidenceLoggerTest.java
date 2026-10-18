@@ -3,7 +3,16 @@ package com.github.tunaozkasap.execlog;
 import static com.github.tunaozkasap.execlog.ExecutionEvidenceLogger.e;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -15,6 +24,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.OutputStreamAppender;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 
@@ -63,5 +73,137 @@ public class ExecutionEvidenceLoggerTest {
 		e().logNow();
 		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"evidence\":{\"userLoggedIn\":true,\"userId\":23234,\"userName\":\"Tuna\",\"userAddress\":{\"streetName\":\"Norrebrogade 23\",\"postCode\":232},\"userDetails\":{\"userAccount\":\"234234\"}},\"context\":\"default\"}", this.getLogOutput());
 	}
-	
+
+	@Test
+	public void test_evidence_is_cleared_after_log_now() {
+		setupLogbackWithEvidenceLayout();
+
+		e().kv("firstExecution", true);
+		e().logNow();
+		Assertions.assertEquals("{}", e().toString());
+
+		byteArrayOutputStream.reset();
+		e().kv("secondExecution", true);
+		e().logNow();
+		Assertions.assertEquals("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"evidence\":{\"secondExecution\":true},\"context\":\"default\"}", this.getLogOutput());
+	}
+
+	@Test
+	public void test_clear_discards_evidence() {
+		e().f("someFact").kv("status", "success");
+		ExecutionEvidenceLogger.clear();
+		Assertions.assertEquals("{}", e().toString());
+	}
+
+	@Test
+	public void test_non_evidence_event_is_logged_with_message() {
+		setupLogbackWithEvidenceLayout();
+
+		LoggerFactory.getLogger(ExecutionEvidenceLogger.class).error("Failed calling logback hook", new IllegalStateException("boom"));
+
+		String output = this.getLogOutput();
+		Assertions.assertTrue(output.startsWith("{\"thread\":\"main\",\"logger\":\"com.github.tunaozkasap.execlog.ExecutionEvidenceLogger\",\"message\":\"Failed calling logback hook\",\"context\":\"default\",\"exception\":\"java.lang.IllegalStateException: boom"), output);
+		Assertions.assertFalse(output.contains("\"evidence\""), output);
+	}
+
+	@Test
+	public void test_threads_do_not_share_evidence() throws Exception {
+		int threadCount = 8;
+		int iterations = 1000;
+		CyclicBarrier startTogether = new CyclicBarrier(threadCount);
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		try {
+			List<Future<String>> results = new ArrayList<>();
+			for (int i = 0; i < threadCount; i++) {
+				int threadNo = i;
+				Callable<String> buildEvidence = () -> {
+					startTogether.await();
+					for (int n = 0; n < iterations; n++) {
+						e().kv("threadNo", threadNo);
+						e().f("work").kv("iteration", n);
+						e().f("work").sf("detail").kv("owner", threadNo);
+						Assertions.assertEquals(threadNo, e().toObjectNode().get("threadNo").asInt());
+					}
+					String evidence = e().toString();
+					ExecutionEvidenceLogger.clear();
+					return evidence;
+				};
+				results.add(executor.submit(buildEvidence));
+			}
+
+			for (int i = 0; i < threadCount; i++) {
+				Assertions.assertEquals("{\"threadNo\":" + i + ",\"work\":{\"iteration\":" + (iterations - 1) + ",\"detail\":{\"owner\":" + i + "}}}", results.get(i).get());
+			}
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	@Test
+	public void test_pooled_thread_starts_with_empty_evidence_after_log_now() throws Exception {
+		setupLogbackWithEvidenceLayout();
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		try {
+			String firstTaskThread = executor.submit(() -> {
+				e().kv("firstTask", "secret");
+				e().logNow();
+				return Thread.currentThread().getName();
+			}).get();
+
+			byteArrayOutputStream.reset();
+			String[] secondTask = executor.submit(() -> {
+				String evidenceAtStart = e().toString();
+				e().kv("secondTask", true);
+				e().logNow();
+				return new String[] {Thread.currentThread().getName(), evidenceAtStart};
+			}).get();
+
+			Assertions.assertEquals(firstTaskThread, secondTask[0], "both tasks must run on the same pooled thread");
+			Assertions.assertEquals("{}", secondTask[1]);
+			String output = this.getLogOutput();
+			Assertions.assertTrue(output.contains("\"evidence\":{\"secondTask\":true}"), output);
+			Assertions.assertFalse(output.contains("firstTask"), output);
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	@Test
+	public void test_concurrent_hook_registers_one_appender() throws Exception {
+		int threadCount = 16;
+		Logger evidenceLogger = (Logger)LoggerFactory.getLogger(ExecutionEvidenceLogger.class);
+		Field alreadyHooked = LogbackHook.class.getDeclaredField("alreadyHooked");
+		alreadyHooked.setAccessible(true);
+		CyclicBarrier startTogether = new CyclicBarrier(threadCount);
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		try {
+			// Repeat to give a race a fair chance to show up
+			for (int round = 0; round < 50; round++) {
+				evidenceLogger.detachAndStopAllAppenders();
+				alreadyHooked.set(null, false);
+
+				List<Future<?>> hooks = new ArrayList<>();
+				for (int i = 0; i < threadCount; i++) {
+					hooks.add(executor.submit(() -> {
+						startTogether.await();
+						LogbackHook.hook();
+						return null;
+					}));
+				}
+				for (Future<?> hook : hooks) {
+					hook.get();
+				}
+
+				int appenderCount = 0;
+				for (Iterator<Appender<ILoggingEvent>> it = evidenceLogger.iteratorForAppenders(); it.hasNext(); it.next()) {
+					appenderCount++;
+				}
+				Assertions.assertEquals(1, appenderCount, "round " + round);
+			}
+		} finally {
+			executor.shutdownNow();
+			evidenceLogger.detachAndStopAllAppenders();
+		}
+	}
+
 }

@@ -21,7 +21,16 @@ public class ExecutionEvidenceLogger {
 	public static ExecutionEvidence e() {
 		return evidencePlane.get();
 	}
-	
+
+	/**
+	 * Discard the evidence gathered so far in the current thread. The next call to {@link #e()} starts a new evidence.
+	 * Call this at the end of an execution when the evidence is not logged via {@link ExecutionEvidence#logNow()},
+	 * otherwise pooled threads will carry the evidence over to the next execution.
+	 */
+	public static void clear() {
+		evidencePlane.remove();
+	}
+
 	public static class ExecutionEvidence {
 		private ObjectNode evidenceNode = objectMapper.createObjectNode();
 		private Map<String, ExecutionFact> factMap = new HashMap<>();
@@ -56,10 +65,17 @@ public class ExecutionEvidenceLogger {
 			return evidenceNode;
 		}
 		
+		/**
+		 * Log the evidence and clear it from the current thread, see {@link ExecutionEvidenceLogger#clear()}.
+		 */
 		public void logNow() {
-			logbackHook();
-	        // This message won't be logged out if the layout was registered correctly
-			log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line", toObjectNode());
+			try {
+				logbackHook();
+		        // This message won't be logged out if the layout was registered correctly
+				log.info("LogbackEvidenceLayout is not registered correctly!, normally evidence json message should be in this log line: {}", toObjectNode());
+			} finally {
+				clear();
+			}
 		}
 		
 		public void logbackHook() {
